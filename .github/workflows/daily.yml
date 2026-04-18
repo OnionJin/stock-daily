@@ -1,28 +1,41 @@
-name: Daily Test
+name: Daily Stock Data
 
 on:
   schedule:
-    - cron: '30 7 * * 1-5'  # 台灣時間週一至週五 15:30
-  workflow_dispatch:          # 允許手動觸發（測試用）
+    - cron: '30 7 * * 1-5'   # UTC 07:30 = 台灣時間 15:30，週一至週五
+  workflow_dispatch:           # 允許手動觸發
 
 permissions:
   contents: write
 
 jobs:
-  run:
+  scrape:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Write today's date
-        run: |
-          echo "$(date '+%Y-%m-%d %H:%M:%S') 執行成功" >> log.txt
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Commit and push
+      - name: Install dependencies
+        run: pip install requests pandas
+
+      - name: Run scraper
+        run: python scraper/main.py
+
+      - name: Commit and push if data changed
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add log.txt
-          git diff --staged --quiet || git commit -m "daily update $(date '+%Y-%m-%d')"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          if git diff --staged --quiet; then
+            echo "No new data (non-trading day or already up to date). Skipping commit."
+          else
+            TW_DATE=$(TZ='Asia/Taipei' date '+%Y-%m-%d')
+            git commit -m "daily update ${TW_DATE}"
+            git push
+          fi

@@ -1,11 +1,535 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>台股每日資料</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股每日資料</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --border: #dde1ea;
+  --primary: #2563eb;
+  --text: #1e293b;
+  --muted: #64748b;
+  --red: #dc2626;
+  --green: #16a34a;
+  --red-light: #fef2f2;
+  --green-light: #f0fdf4;
+  --hover: #f1f5f9;
+  --header-bg: #1e293b;
+  --header-text: #f8fafc;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* ── Top bar ── */
+#topbar {
+  background: var(--header-bg);
+  color: var(--header-text);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+#topbar h1 { font-size: 16px; font-weight: 600; margin-right: 8px; }
+#topbar select, #topbar button {
+  font-size: 13px;
+  border-radius: 5px;
+  border: 1px solid #475569;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+#topbar select { background: #334155; color: #f8fafc; }
+#btnDownload {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  font-weight: 500;
+}
+#btnDownload:hover { background: #1d4ed8; }
+#countBadge {
+  margin-left: auto;
+  background: #334155;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Filter panel ── */
+#filterPanel {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.fgroup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.flabel { font-weight: 600; color: var(--muted); white-space: nowrap; }
+.fgroup label { display: flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; }
+.fgroup input[type=checkbox] { cursor: pointer; }
+.fgroup select, .fgroup input[type=number], .fgroup input[type=text] {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+}
+.fgroup input[type=number] { width: 90px; }
+.fgroup input[type=text]   { width: 140px; }
+#btnReset {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+#btnReset:hover { background: var(--hover); }
+
+/* ── Table wrapper ── */
+#tableWrap {
+  overflow: auto;
+  max-height: calc(100vh - 120px);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--header-bg);
+  color: var(--header-text);
+  padding: 7px 10px;
+  text-align: right;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  font-size: 12px;
+  border-right: 1px solid #334155;
+}
+thead th:first-child, thead th:nth-child(2) { text-align: left; }
+thead th:hover { background: #334155; }
+thead th .sort-icon { display: inline-block; width: 14px; text-align: center; opacity: .5; }
+thead th.asc .sort-icon::after  { content: "▲"; opacity: 1; }
+thead th.desc .sort-icon::after { content: "▼"; opacity: 1; }
+thead th:not(.asc):not(.desc) .sort-icon::after { content: "⇅"; }
+
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--hover); }
+tbody td {
+  padding: 5px 10px;
+  text-align: right;
+  color: var(--text);
+}
+tbody td:first-child { text-align: left; font-weight: 600; }
+tbody td:nth-child(2) { text-align: left; }
+
+.up   { color: var(--red); }
+.down { color: var(--green); }
+.nc   { color: var(--muted); }
+
+.tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tag-r1 { background: #fee2e2; color: #b91c1c; }   /* 紅增 */
+.tag-r2 { background: #fef3c7; color: #b45309; }   /* 紅縮 */
+.tag-g1 { background: #d1fae5; color: #065f46; }   /* 綠增 */
+.tag-g2 { background: #f0fdf4; color: #15803d; }   /* 綠縮 */
+.tag-rg { background: #e0e7ff; color: #3730a3; }   /* 紅轉綠 */
+.tag-gr { background: #ffe4e6; color: #9f1239; }   /* 綠轉紅 */
+.tag-y  { background: #fef9c3; color: #92400e; }   /* 出量是 */
+.tag-b  { background: #dbeafe; color: #1e40af; }   /* 站上60均是 */
+
+#loading {
+  text-align: center;
+  padding: 60px;
+  color: var(--muted);
+  font-size: 15px;
+}
+#error {
+  display: none;
+  text-align: center;
+  padding: 40px;
+  color: var(--red);
+}
+</style>
 </head>
 <body>
+
+<!-- Top bar -->
+<div id="topbar">
   <h1>台股每日資料</h1>
-  <p>網站建置中，敬請期待。</p>
+  <select id="dateSel"></select>
+  <button id="btnDownload">下載 CSV</button>
+  <div id="countBadge">載入中…</div>
+</div>
+
+<!-- Filter panel -->
+<div id="filterPanel">
+  <div class="fgroup">
+    <span class="flabel">搜尋:</span>
+    <input type="text" id="searchBox" placeholder="代號 / 名稱">
+  </div>
+
+  <div class="fgroup">
+    <span class="flabel">MACD:</span>
+    <label><input type="checkbox" class="macdChk" value="紅增" checked> 紅增</label>
+    <label><input type="checkbox" class="macdChk" value="紅縮" checked> 紅縮</label>
+    <label><input type="checkbox" class="macdChk" value="綠增" checked> 綠增</label>
+    <label><input type="checkbox" class="macdChk" value="綠縮" checked> 綠縮</label>
+    <label><input type="checkbox" class="macdChk" value="紅轉綠" checked> 紅轉綠</label>
+    <label><input type="checkbox" class="macdChk" value="綠轉紅" checked> 綠轉紅</label>
+    <label><input type="checkbox" class="macdChk" value="" checked> 無</label>
+  </div>
+
+  <div class="fgroup">
+    <span class="flabel">出量:</span>
+    <select id="selVolSurge">
+      <option value="">全部</option>
+      <option value="是">是</option>
+    </select>
+  </div>
+
+  <div class="fgroup">
+    <span class="flabel">站上60均:</span>
+    <select id="selAbove60">
+      <option value="">全部</option>
+      <option value="是">是</option>
+    </select>
+  </div>
+
+  <div class="fgroup">
+    <span class="flabel">成交金額 ≥</span>
+    <input type="number" id="minAmount" placeholder="萬元" min="0" step="1000">
+    <span style="color:var(--muted)">萬元</span>
+  </div>
+
+  <button id="btnReset">重設篩選</button>
+</div>
+
+<!-- Table -->
+<div id="tableWrap">
+  <div id="loading">載入資料中…</div>
+  <div id="error">無法載入資料，請確認已有 CSV 資料檔案。</div>
+  <table id="mainTable" style="display:none">
+    <thead id="thead"></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+// ── Column definitions ────────────────────────────────────────────────────────
+const COLS = [
+  { key: "股票代號",      label: "代號",        type: "str",  align: "left"  },
+  { key: "股票名稱",      label: "名稱",        type: "str",  align: "left"  },
+  { key: "收盤價",        label: "收盤",        type: "num",  align: "right" },
+  { key: "漲跌幅(%)",     label: "漲跌(%)",     type: "pct",  align: "right" },
+  { key: "成交量（股）",  label: "成交量(股)",  type: "vol",  align: "right" },
+  { key: "成交金額（元）",label: "金額(萬)",    type: "amt",  align: "right" },
+  { key: "MACD狀態",      label: "MACD狀態",    type: "macd", align: "center"},
+  { key: "出量",          label: "出量",        type: "flag", align: "center"},
+  { key: "站上60日均",    label: "站60均",      type: "flag2",align: "center"},
+  { key: "5日均價",       label: "MA5",         type: "num",  align: "right" },
+  { key: "10日均價",      label: "MA10",        type: "num",  align: "right" },
+  { key: "20日均價",      label: "MA20",        type: "num",  align: "right" },
+  { key: "60日均價",      label: "MA60",        type: "num",  align: "right" },
+  { key: "5日均斜率(%)",  label: "MA5斜率(%)",  type: "slope",align: "right" },
+  { key: "10日均斜率(%)", label: "MA10斜率(%)", type: "slope",align: "right" },
+  { key: "20日均斜率(%)", label: "MA20斜率(%)", type: "slope",align: "right" },
+];
+
+// ── CSV parser ────────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  // Strip BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitCSVLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = splitCSVLine(lines[i]);
+    if (vals.length === 0) continue;
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h] = vals[idx] ?? ""; });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = "", inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (c === ',' && !inQuote) {
+      result.push(cur); cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+// ── Cell renderers ────────────────────────────────────────────────────────────
+const MACD_CLASS = {
+  "紅增": "tag-r1", "紅縮": "tag-r2",
+  "綠增": "tag-g1", "綠縮": "tag-g2",
+  "紅轉綠": "tag-rg", "綠轉紅": "tag-gr",
+};
+
+function renderCell(col, val) {
+  const v = val ?? "";
+  switch (col.type) {
+    case "pct": {
+      const n = parseFloat(v);
+      if (isNaN(n)) return `<td class="nc">-</td>`;
+      const cls = n > 0 ? "up" : n < 0 ? "down" : "nc";
+      const sign = n > 0 ? "+" : "";
+      return `<td class="${cls}">${sign}${n.toFixed(2)}%</td>`;
+    }
+    case "vol": {
+      const n = parseInt(v);
+      return `<td>${isNaN(n) ? "-" : n.toLocaleString()}</td>`;
+    }
+    case "amt": {
+      const n = parseInt(v);
+      if (isNaN(n)) return `<td>-</td>`;
+      return `<td>${Math.round(n/10000).toLocaleString()}</td>`;
+    }
+    case "macd": {
+      if (!v) return `<td>-</td>`;
+      const cls = MACD_CLASS[v] || "";
+      return `<td><span class="tag ${cls}">${v}</span></td>`;
+    }
+    case "flag": {
+      if (v === "是") return `<td><span class="tag tag-y">是</span></td>`;
+      return `<td><span style="color:var(--muted)">${v || "-"}</span></td>`;
+    }
+    case "flag2": {
+      if (v === "是") return `<td><span class="tag tag-b">是</span></td>`;
+      return `<td><span style="color:var(--muted)">${v || "-"}</span></td>`;
+    }
+    case "slope": {
+      const n = parseFloat(v);
+      if (isNaN(n)) return `<td class="nc">-</td>`;
+      const cls = n > 0 ? "up" : n < 0 ? "down" : "nc";
+      const sign = n > 0 ? "+" : "";
+      return `<td class="${cls}">${sign}${n.toFixed(2)}%</td>`;
+    }
+    case "num": {
+      const n = parseFloat(v);
+      return `<td>${isNaN(n) ? "-" : n.toFixed(2)}</td>`;
+    }
+    default:
+      return `<td>${v || "-"}</td>`;
+  }
+}
+
+// Sort value extractor
+function sortVal(col, val) {
+  const v = val ?? "";
+  if (col.type === "str" || col.type === "macd" || col.type === "flag" || col.type === "flag2") {
+    return v;
+  }
+  const n = parseFloat(v.toString().replace(/,/g, ""));
+  return isNaN(n) ? -Infinity : n;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allRows = [];
+let sortColIdx = 3;   // default sort: 漲跌幅
+let sortAsc    = false;
+let currentDate = "";
+
+// ── Build table header ────────────────────────────────────────────────────────
+function buildHeader() {
+  const thead = document.getElementById("thead");
+  const tr = document.createElement("tr");
+  COLS.forEach((col, idx) => {
+    const th = document.createElement("th");
+    th.innerHTML = `${col.label} <span class="sort-icon"></span>`;
+    th.dataset.idx = idx;
+    th.addEventListener("click", () => {
+      if (sortColIdx === idx) sortAsc = !sortAsc;
+      else { sortColIdx = idx; sortAsc = false; }
+      renderTable();
+    });
+    tr.appendChild(th);
+  });
+  thead.appendChild(tr);
+}
+
+// ── Render table body ─────────────────────────────────────────────────────────
+function renderTable() {
+  const search   = document.getElementById("searchBox").value.trim().toLowerCase();
+  const volSurge = document.getElementById("selVolSurge").value;
+  const above60  = document.getElementById("selAbove60").value;
+  const minAmt   = parseFloat(document.getElementById("minAmount").value) || 0;
+  const macdOK   = new Set(
+    [...document.querySelectorAll(".macdChk:checked")].map(c => c.value)
+  );
+
+  let filtered = allRows.filter(row => {
+    if (search) {
+      const sym  = (row["股票代號"] || "").toLowerCase();
+      const name = (row["股票名稱"] || "").toLowerCase();
+      if (!sym.includes(search) && !name.includes(search)) return false;
+    }
+    if (!macdOK.has(row["MACD狀態"] || "")) return false;
+    if (volSurge && row["出量"] !== volSurge)       return false;
+    if (above60  && row["站上60日均"] !== above60)  return false;
+    if (minAmt > 0) {
+      const amt = parseInt(row["成交金額（元）"] || "0");
+      if (isNaN(amt) || amt / 10000 < minAmt) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  const col = COLS[sortColIdx];
+  filtered.sort((a, b) => {
+    const va = sortVal(col, a[col.key]);
+    const vb = sortVal(col, b[col.key]);
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ?  1 : -1;
+    return 0;
+  });
+
+  // Update sort icons in header
+  document.querySelectorAll("thead th").forEach((th, idx) => {
+    th.classList.remove("asc", "desc");
+    if (idx === sortColIdx) th.classList.add(sortAsc ? "asc" : "desc");
+  });
+
+  // Render rows
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = filtered.map(row =>
+    "<tr>" + COLS.map(col => renderCell(col, row[col.key])).join("") + "</tr>"
+  ).join("");
+
+  document.getElementById("countBadge").textContent =
+    `顯示 ${filtered.length} / ${allRows.length} 檔`;
+}
+
+// ── Load CSV for a given date ─────────────────────────────────────────────────
+async function loadDate(dateStr) {
+  currentDate = dateStr;
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("mainTable").style.display = "none";
+  document.getElementById("error").style.display = "none";
+  document.getElementById("countBadge").textContent = "載入中…";
+
+  try {
+    const resp = await fetch(`./data/${dateStr}.csv?_=${Date.now()}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    allRows = parseCSV(text);
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("mainTable").style.display = "table";
+    renderTable();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("error").style.display = "block";
+    document.getElementById("countBadge").textContent = "載入失敗";
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  buildHeader();
+
+  // Load index.json
+  let index;
+  try {
+    const r = await fetch(`./data/index.json?_=${Date.now()}`);
+    if (!r.ok) throw new Error("index.json not found");
+    index = await r.json();
+  } catch (e) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("error").style.display = "block";
+    document.getElementById("countBadge").textContent = "尚無資料";
+    return;
+  }
+
+  // Populate date selector (newest first)
+  const dateSel = document.getElementById("dateSel");
+  const dates   = [...(index.dates || [])].reverse();
+  dates.forEach(d => {
+    const opt = document.createElement("option");
+    opt.value = d; opt.textContent = d;
+    dateSel.appendChild(opt);
+  });
+  dateSel.value = index.latest || dates[0] || "";
+
+  dateSel.addEventListener("change", () => loadDate(dateSel.value));
+
+  // Download button
+  document.getElementById("btnDownload").addEventListener("click", () => {
+    if (!currentDate) return;
+    const a = document.createElement("a");
+    a.href = `./data/${currentDate}.csv`;
+    a.download = `${currentDate}.csv`;
+    a.click();
+  });
+
+  // Filter listeners → re-render
+  const filterInputs = [
+    ...document.querySelectorAll(".macdChk"),
+    document.getElementById("selVolSurge"),
+    document.getElementById("selAbove60"),
+    document.getElementById("minAmount"),
+    document.getElementById("searchBox"),
+  ];
+  filterInputs.forEach(el =>
+    el.addEventListener(el.tagName === "INPUT" && el.type === "text" ? "input" : "change",
+      renderTable)
+  );
+  document.getElementById("searchBox").addEventListener("input", renderTable);
+  document.getElementById("minAmount").addEventListener("input", renderTable);
+
+  // Reset button
+  document.getElementById("btnReset").addEventListener("click", () => {
+    document.getElementById("searchBox").value = "";
+    document.getElementById("selVolSurge").value = "";
+    document.getElementById("selAbove60").value = "";
+    document.getElementById("minAmount").value = "";
+    document.querySelectorAll(".macdChk").forEach(c => c.checked = true);
+    renderTable();
+  });
+
+  // Load latest date
+  if (dateSel.value) loadDate(dateSel.value);
+}
+
+init();
+</script>
 </body>
 </html>
