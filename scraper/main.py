@@ -4,6 +4,7 @@ Taiwan Stock Daily Scraper
 TWSE (上市) + TPEX (上櫃) → docs/data/YYYY-MM-DD.csv
 """
 
+import argparse
 import glob
 import json
 import os
@@ -264,7 +265,20 @@ def compute_indicators(sym: str, today_ds: str,
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    today    = tw_today()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="指定日期 YYYY-MM-DD（預設為今天）")
+    args = parser.parse_args()
+
+    if args.date:
+        try:
+            today = datetime.strptime(args.date, "%Y-%m-%d").date()
+        except ValueError:
+            print(f"日期格式錯誤，請用 YYYY-MM-DD，例如：--date 2026-04-17")
+            sys.exit(1)
+        print(f"(手動指定日期: {args.date})")
+    else:
+        today = tw_today()
+
     today_ds_str = ds(today)
 
     if today.weekday() >= 5:

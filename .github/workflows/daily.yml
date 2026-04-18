@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '30 7 * * 1-5'   # UTC 07:30 = 台灣時間 15:30，週一至週五
   workflow_dispatch:           # 允許手動觸發
+    inputs:
+      date:
+        description: '指定日期 YYYY-MM-DD（留空則使用今天）'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -25,7 +30,12 @@ jobs:
         run: pip install requests pandas
 
       - name: Run scraper
-        run: python scraper/main.py
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            python scraper/main.py --date "${{ github.event.inputs.date }}"
+          else
+            python scraper/main.py
+          fi
 
       - name: Commit and push if data changed
         run: |
