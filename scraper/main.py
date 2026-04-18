@@ -236,6 +236,9 @@ def compute_indicators(sym: str, today_ds: str,
     def fmt(v):
         return round(v, 2) if not pd.isna(v) else ""
 
+    def fmt_slope(v):
+        return round(v, 4) if not pd.isna(v) else ""
+
     ma5, ma10, ma20, ma60 = ma(5), ma(10), ma(20), ma(60)
 
     # Volume surge: today >= avg of previous 5 trading days × 1.5
@@ -257,9 +260,9 @@ def compute_indicators(sym: str, today_ds: str,
         "above60":    above60,
         "ma5":    fmt(ma5),   "ma10":  fmt(ma10),
         "ma20":   fmt(ma20),  "ma60":  fmt(ma60),
-        "slope5":  fmt(slope(ma5,  ma_5ago(5))),
-        "slope10": fmt(slope(ma10, ma_5ago(10))),
-        "slope20": fmt(slope(ma20, ma_5ago(20))),
+        "slope5":  fmt_slope(slope(ma5,  ma_5ago(5))),
+        "slope10": fmt_slope(slope(ma10, ma_5ago(10))),
+        "slope20": fmt_slope(slope(ma20, ma_5ago(20))),
     }
 
 # ── Main ──────────────────────────────────────────────────────────────────────

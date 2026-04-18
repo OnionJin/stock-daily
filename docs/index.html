@@ -196,29 +196,27 @@ tbody td:nth-child(2) { text-align: left; }
 
   <div class="fgroup">
     <span class="flabel">MACD:</span>
-    <label><input type="checkbox" class="macdChk" value="紅增" checked> 紅增</label>
-    <label><input type="checkbox" class="macdChk" value="紅縮" checked> 紅縮</label>
-    <label><input type="checkbox" class="macdChk" value="綠增" checked> 綠增</label>
-    <label><input type="checkbox" class="macdChk" value="綠縮" checked> 綠縮</label>
-    <label><input type="checkbox" class="macdChk" value="紅轉綠" checked> 紅轉綠</label>
-    <label><input type="checkbox" class="macdChk" value="綠轉紅" checked> 綠轉紅</label>
-    <label><input type="checkbox" class="macdChk" value="" checked> 無</label>
+    <label><input type="checkbox" class="macdChk" value="紅增"> 紅增</label>
+    <label><input type="checkbox" class="macdChk" value="紅縮"> 紅縮</label>
+    <label><input type="checkbox" class="macdChk" value="綠增"> 綠增</label>
+    <label><input type="checkbox" class="macdChk" value="綠縮"> 綠縮</label>
+    <label><input type="checkbox" class="macdChk" value="紅轉綠"> 紅轉綠</label>
+    <label><input type="checkbox" class="macdChk" value="綠轉紅"> 綠轉紅</label>
+    <label><input type="checkbox" class="macdChk" value=""> 無</label>
   </div>
 
   <div class="fgroup">
     <span class="flabel">出量:</span>
-    <select id="selVolSurge">
-      <option value="">全部</option>
-      <option value="是">是</option>
-    </select>
+    <label><input type="checkbox" class="volChk" value="是" checked> 是</label>
+    <label><input type="checkbox" class="volChk" value="否" checked> 否</label>
+    <label><input type="checkbox" class="volChk" value="" checked> 無</label>
   </div>
 
   <div class="fgroup">
     <span class="flabel">站上60均:</span>
-    <select id="selAbove60">
-      <option value="">全部</option>
-      <option value="是">是</option>
-    </select>
+    <label><input type="checkbox" class="above60Chk" value="是" checked> 是</label>
+    <label><input type="checkbox" class="above60Chk" value="否" checked> 否</label>
+    <label><input type="checkbox" class="above60Chk" value="" checked> 無</label>
   </div>
 
   <div class="fgroup">
@@ -389,12 +387,10 @@ function buildHeader() {
 // ── Render table body ─────────────────────────────────────────────────────────
 function renderTable() {
   const search   = document.getElementById("searchBox").value.trim().toLowerCase();
-  const volSurge = document.getElementById("selVolSurge").value;
-  const above60  = document.getElementById("selAbove60").value;
-  const minAmt   = parseFloat(document.getElementById("minAmount").value) || 0;
-  const macdOK   = new Set(
-    [...document.querySelectorAll(".macdChk:checked")].map(c => c.value)
-  );
+  const minAmt     = parseFloat(document.getElementById("minAmount").value) || 0;
+  const macdOK     = new Set([...document.querySelectorAll(".macdChk:checked")].map(c => c.value));
+  const volOK      = new Set([...document.querySelectorAll(".volChk:checked")].map(c => c.value));
+  const above60OK  = new Set([...document.querySelectorAll(".above60Chk:checked")].map(c => c.value));
 
   let filtered = allRows.filter(row => {
     if (search) {
@@ -402,9 +398,9 @@ function renderTable() {
       const name = (row["股票名稱"] || "").toLowerCase();
       if (!sym.includes(search) && !name.includes(search)) return false;
     }
-    if (!macdOK.has(row["MACD狀態"] || "")) return false;
-    if (volSurge && row["出量"] !== volSurge)       return false;
-    if (above60  && row["站上60日均"] !== above60)  return false;
+    if (macdOK.size    && !macdOK.has(row["MACD狀態"] || ""))    return false;
+    if (volOK.size     && !volOK.has(row["出量"] || ""))          return false;
+    if (above60OK.size && !above60OK.has(row["站上60日均"] || "")) return false;
     if (minAmt > 0) {
       const amt = parseInt(row["成交金額（元）"] || "0");
       if (isNaN(amt) || amt / 10000 < minAmt) return false;
@@ -501,27 +497,17 @@ async function init() {
   });
 
   // Filter listeners → re-render
-  const filterInputs = [
-    ...document.querySelectorAll(".macdChk"),
-    document.getElementById("selVolSurge"),
-    document.getElementById("selAbove60"),
-    document.getElementById("minAmount"),
-    document.getElementById("searchBox"),
-  ];
-  filterInputs.forEach(el =>
-    el.addEventListener(el.tagName === "INPUT" && el.type === "text" ? "input" : "change",
-      renderTable)
-  );
   document.getElementById("searchBox").addEventListener("input", renderTable);
   document.getElementById("minAmount").addEventListener("input", renderTable);
+  document.querySelectorAll(".macdChk, .volChk, .above60Chk").forEach(el =>
+    el.addEventListener("change", renderTable)
+  );
 
   // Reset button
   document.getElementById("btnReset").addEventListener("click", () => {
     document.getElementById("searchBox").value = "";
-    document.getElementById("selVolSurge").value = "";
-    document.getElementById("selAbove60").value = "";
     document.getElementById("minAmount").value = "";
-    document.querySelectorAll(".macdChk").forEach(c => c.checked = true);
+    document.querySelectorAll(".macdChk, .volChk, .above60Chk").forEach(c => c.checked = true);
     renderTable();
   });
 
