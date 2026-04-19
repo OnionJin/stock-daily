@@ -22,7 +22,11 @@ TW_TZ      = timezone(timedelta(hours=8))
 DATA_DIR   = "docs/data"
 CACHE_FILE = os.path.join(DATA_DIR, "prices_cache.json")
 LOOKBACK   = 80   # trading days back (60MA needs 60 + slope buffer + safety)
-HEADERS    = {"User-Agent": "Mozilla/5.0 (compatible; stock-daily-bot/1.0)"}
+HEADERS    = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer":    "https://www.twse.com.tw/",
+    "Accept":     "application/json, text/javascript, */*",
+}
 
 # ── Date helpers ──────────────────────────────────────────────────────────────
 

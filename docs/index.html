@@ -206,17 +206,11 @@ tbody td:nth-child(2) { text-align: left; }
   </div>
 
   <div class="fgroup">
-    <span class="flabel">出量:</span>
-    <label><input type="checkbox" class="volChk" value="是" checked> 是</label>
-    <label><input type="checkbox" class="volChk" value="否" checked> 否</label>
-    <label><input type="checkbox" class="volChk" value="" checked> 無</label>
+    <label><input type="checkbox" id="chkVolSurge"> 只看出量</label>
   </div>
 
   <div class="fgroup">
-    <span class="flabel">站上60均:</span>
-    <label><input type="checkbox" class="above60Chk" value="是" checked> 是</label>
-    <label><input type="checkbox" class="above60Chk" value="否" checked> 否</label>
-    <label><input type="checkbox" class="above60Chk" value="" checked> 無</label>
+    <label><input type="checkbox" id="chkAbove60"> 只看站上60均</label>
   </div>
 
   <div class="fgroup">
@@ -339,7 +333,8 @@ function renderCell(col, val) {
       if (isNaN(n)) return `<td class="nc">-</td>`;
       const cls = n > 0 ? "up" : n < 0 ? "down" : "nc";
       const sign = n > 0 ? "+" : "";
-      return `<td class="${cls}">${sign}${n.toFixed(2)}%</td>`;
+      const decimals = Math.abs(n) < 0.01 ? 4 : 2;
+      return `<td class="${cls}">${sign}${n.toFixed(decimals)}%</td>`;
     }
     case "num": {
       const n = parseFloat(v);
@@ -387,10 +382,10 @@ function buildHeader() {
 // ── Render table body ─────────────────────────────────────────────────────────
 function renderTable() {
   const search   = document.getElementById("searchBox").value.trim().toLowerCase();
-  const minAmt     = parseFloat(document.getElementById("minAmount").value) || 0;
-  const macdOK     = new Set([...document.querySelectorAll(".macdChk:checked")].map(c => c.value));
-  const volOK      = new Set([...document.querySelectorAll(".volChk:checked")].map(c => c.value));
-  const above60OK  = new Set([...document.querySelectorAll(".above60Chk:checked")].map(c => c.value));
+  const minAmt    = parseFloat(document.getElementById("minAmount").value) || 0;
+  const macdOK    = new Set([...document.querySelectorAll(".macdChk:checked")].map(c => c.value));
+  const onlyVol   = document.getElementById("chkVolSurge").checked;
+  const onlyA60   = document.getElementById("chkAbove60").checked;
 
   let filtered = allRows.filter(row => {
     if (search) {
@@ -398,9 +393,9 @@ function renderTable() {
       const name = (row["股票名稱"] || "").toLowerCase();
       if (!sym.includes(search) && !name.includes(search)) return false;
     }
-    if (macdOK.size    && !macdOK.has(row["MACD狀態"] || ""))    return false;
-    if (volOK.size     && !volOK.has(row["出量"] || ""))          return false;
-    if (above60OK.size && !above60OK.has(row["站上60日均"] || "")) return false;
+    if (macdOK.size && !macdOK.has(row["MACD狀態"] || "")) return false;
+    if (onlyVol  && row["出量"]       !== "是") return false;
+    if (onlyA60  && row["站上60日均"] !== "是") return false;
     if (minAmt > 0) {
       const amt = parseInt(row["成交金額（元）"] || "0");
       if (isNaN(amt) || amt / 10000 < minAmt) return false;
@@ -499,15 +494,17 @@ async function init() {
   // Filter listeners → re-render
   document.getElementById("searchBox").addEventListener("input", renderTable);
   document.getElementById("minAmount").addEventListener("input", renderTable);
-  document.querySelectorAll(".macdChk, .volChk, .above60Chk").forEach(el =>
-    el.addEventListener("change", renderTable)
-  );
+  document.querySelectorAll(".macdChk").forEach(el => el.addEventListener("change", renderTable));
+  document.getElementById("chkVolSurge").addEventListener("change", renderTable);
+  document.getElementById("chkAbove60").addEventListener("change", renderTable);
 
   // Reset button
   document.getElementById("btnReset").addEventListener("click", () => {
     document.getElementById("searchBox").value = "";
     document.getElementById("minAmount").value = "";
-    document.querySelectorAll(".macdChk, .volChk, .above60Chk").forEach(c => c.checked = true);
+    document.querySelectorAll(".macdChk").forEach(c => c.checked = false);
+    document.getElementById("chkVolSurge").checked = false;
+    document.getElementById("chkAbove60").checked  = false;
     renderTable();
   });
 
