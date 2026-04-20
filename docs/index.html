@@ -238,6 +238,7 @@ const COLS = [
   { key: "股票代號",      label: "代號",        type: "str",  align: "left"  },
   { key: "股票名稱",      label: "名稱",        type: "str",  align: "left"  },
   { key: "收盤價",        label: "收盤",        type: "num",  align: "right" },
+  { key: "漲跌(元)",      label: "漲跌(元)",    type: "chg",  align: "right" },
   { key: "漲跌幅(%)",     label: "漲跌(%)",     type: "pct",  align: "right" },
   { key: "成交量（股）",  label: "成交量(股)",  type: "vol",  align: "right" },
   { key: "成交金額（元）",label: "金額(萬)",    type: "amt",  align: "right" },
@@ -299,6 +300,13 @@ const MACD_CLASS = {
 function renderCell(col, val) {
   const v = val ?? "";
   switch (col.type) {
+    case "chg": {
+      const n = parseFloat(v);
+      if (isNaN(n)) return `<td class="nc">-</td>`;
+      const cls = n > 0 ? "up" : n < 0 ? "down" : "nc";
+      const sign = n > 0 ? "+" : "";
+      return `<td class="${cls}">${sign}${n.toFixed(2)}</td>`;
+    }
     case "pct": {
       const n = parseFloat(v);
       if (isNaN(n)) return `<td class="nc">-</td>`;

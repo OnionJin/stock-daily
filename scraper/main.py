@@ -71,19 +71,24 @@ def fetch_twse(d: date) -> Optional[list]:
 
     out = []
     for row in j["data"]:
-        # fields: 證券代號, 證券名稱, 成交股數, 成交金額, 開盤價, 最高價, 最低價, 收盤價, 漲跌幅(%)
+        # fields: 證券代號, 證券名稱, 成交股數, 成交金額, 開盤價, 最高價, 最低價, 收盤價, 漲跌(+/-)
+        # row[8] 是絕對漲跌值，非百分比，需自行換算
         if len(row) < 9:
             continue
         close = clean(row[7])
         if pd.isna(close) or close <= 0:
             continue
+        chg  = clean(row[8])
+        prev = close - chg
+        chg_pct = (chg / prev * 100) if (not pd.isna(chg) and prev != 0) else float("nan")
         vol = clean(row[2])
         amt = clean(row[3])
         out.append({
             "symbol":     row[0].strip(),
             "name":       row[1].strip(),
             "close":      close,
-            "change_pct": clean(row[8]),
+            "change":     chg,
+            "change_pct": chg_pct,
             "volume":     int(vol) if not pd.isna(vol) else 0,
             "amount":     int(amt) if not pd.isna(amt) else 0,
         })
@@ -127,6 +132,7 @@ def fetch_tpex(d: date) -> Optional[list]:
             "symbol":     row[0].strip(),
             "name":       row[1].strip(),
             "close":      close,
+            "change":     chg,
             "change_pct": chg_pct,
             "volume":     int(vol_k * 1000) if not pd.isna(vol_k) else 0,
             "amount":     int(amt_k * 1000) if not pd.isna(amt_k) else 0,
@@ -344,13 +350,15 @@ def main():
         ind = compute_indicators(
             sym, today_ds_str, close_hist, vol_hist, all_dates, rec["volume"]
         )
-        cp = rec["change_pct"]
+        cp  = rec["change_pct"]
+        chg = rec["change"]
         rows.append({
             "股票代號":        sym,
             "股票名稱":        rec["name"],
             "日期":            today_ds_str,
             "收盤價":          rec["close"],
-            "漲跌幅(%)":       round(cp, 2) if not pd.isna(cp) else "",
+            "漲跌(元)":        round(chg, 2) if not pd.isna(chg) else "",
+            "漲跌幅(%)":       round(cp,  2) if not pd.isna(cp)  else "",
             "成交量（股）":    rec["volume"],
             "成交金額（元）":  rec["amount"],
             "MACD狀態":        ind["macd_state"],
