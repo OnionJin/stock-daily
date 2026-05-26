@@ -95,47 +95,66 @@ def fetch_twse(d: date) -> Optional[list]:
     return out or None
 
 
-def fetch_tpex(d: date) -> Optional[list]:
-    """Fetch TPEX OTC quotes for a given date."""
-    roc       = d.year - 1911
-    tpex_date = f"{roc}/{d.month:02d}/{d.day:02d}"
-    url = (
-        "https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/"
-        f"stk_wn1430_result.php?l=zh-tw&d={tpex_date}&se=EW"
-    )
+def _parse_roc_date(s: str) -> Optional[date]:
+    """Parse ROC date string like '1150421' to AD date."""
+    if not s:
+        return None
+    s = str(s).strip()
+    if len(s) < 6:
+        return None
     try:
-        r = requests.get(url, headers=HEADERS, timeout=30)
-        j = r.json()
+        mmdd     = s[-4:]
+        roc_year = int(s[:-4])
+        return date(roc_year + 1911, int(mmdd[:2]), int(mmdd[2:]))
+    except Exception:
+        return None
+
+
+def fetch_tpex(d: date) -> Optional[list]:
+    """Fetch TPEX OTC daily quotes for a given date.
+
+    Uses the modern TPEX OpenAPI endpoint, which returns the most-recent
+    trading day's data only. Historical dates are not supported here —
+    if the API's date doesn't match the requested date, we return None
+    and let the caller treat that date as missing.
+    """
+    url = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
+    try:
+        r    = requests.get(url, headers=HEADERS, timeout=30)
+        data = r.json()
     except Exception as e:
         print(f"  TPEX {d}: {e}")
         return None
 
-    raw = j.get("aaData", [])
-    if not raw:
+    if not isinstance(data, list) or not data:
+        return None
+
+    # Verify the API's date matches the requested date
+    api_date = _parse_roc_date(data[0].get("Date") or "")
+    if api_date and api_date != d:
         return None
 
     out = []
-    for row in raw:
-        # fields: 代號, 名稱, 收盤, 漲跌(abs), 開盤, 最高, 最低,
-        #         成交股數(千股), 成交金額(千元), ...
-        if len(row) < 9:
+    for item in data:
+        symbol = (item.get("SecuritiesCompanyCode") or "").strip()
+        name   = (item.get("CompanyName") or "").strip()
+        close  = clean(item.get("Close"))
+        if not symbol or pd.isna(close) or close <= 0:
             continue
-        close = clean(row[2])
-        if pd.isna(close) or close <= 0:
-            continue
-        chg  = clean(row[3])
-        prev = close - chg
+        chg     = clean(item.get("Change"))
+        prev    = close - chg
         chg_pct = (chg / prev * 100) if (not pd.isna(chg) and prev != 0) else float("nan")
-        vol_k = clean(row[7])
-        amt_k = clean(row[8])
+        # TradingShares 為 千股，TradingAmount 為 元
+        vol_k = clean(item.get("TradingShares"))
+        amt   = clean(item.get("TradingAmount"))
         out.append({
-            "symbol":     row[0].strip(),
-            "name":       row[1].strip(),
+            "symbol":     symbol,
+            "name":       name,
             "close":      close,
             "change":     chg,
             "change_pct": chg_pct,
             "volume":     int(vol_k * 1000) if not pd.isna(vol_k) else 0,
-            "amount":     int(amt_k * 1000) if not pd.isna(amt_k) else 0,
+            "amount":     int(amt) if not pd.isna(amt) else 0,
         })
     return out or None
 
