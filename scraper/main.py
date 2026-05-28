@@ -208,6 +208,87 @@ def add_records_to_cache(cache: dict, close_hist: dict, vol_hist: dict,
         close_hist.setdefault(sym, {})[date_str] = rec["close"]
         vol_hist.setdefault(sym, {})[date_str]   = rec["volume"]
 
+
+# ── yfinance bootstrap (for TPEX historical data) ─────────────────────────────
+
+def bootstrap_via_yfinance(symbols: list, suffix: str, today: date,
+                            close_hist: dict, vol_hist: dict, cache: dict,
+                            min_days: int = 30) -> int:
+    """Use yfinance to backfill historical close/volume for given symbols.
+
+    suffix: ".TW" for TWSE listed, ".TWO" for TPEX OTC.
+    Returns the number of stocks successfully bootstrapped.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        print("  yfinance not installed — skipping yfinance bootstrap.")
+        return 0
+
+    # Filter to only symbols that lack sufficient history
+    need = [s for s in symbols if len(close_hist.get(s, {})) < min_days]
+    if not need:
+        return 0
+
+    start = today - timedelta(days=LOOKBACK + 40)   # extra buffer for non-trading days
+    end   = today + timedelta(days=1)
+
+    print(f"  yfinance bootstrap ({suffix}): {len(need)} stocks needing history…")
+
+    tickers = [f"{s}{suffix}" for s in need]
+    success = 0
+
+    CHUNK = 150
+    for i in range(0, len(tickers), CHUNK):
+        chunk        = tickers[i:i + CHUNK]
+        chunk_syms   = need[i:i + CHUNK]
+        print(f"    chunk {i // CHUNK + 1}/{(len(tickers) + CHUNK - 1) // CHUNK}: {len(chunk)} tickers")
+        try:
+            df = yf.download(
+                tickers=chunk,
+                start=start.strftime("%Y-%m-%d"),
+                end=end.strftime("%Y-%m-%d"),
+                auto_adjust=False,
+                group_by="ticker",
+                threads=True,
+                progress=False,
+            )
+        except Exception as e:
+            print(f"    chunk failed: {e}")
+            continue
+
+        if df is None or df.empty:
+            continue
+
+        for sym, ticker in zip(chunk_syms, chunk):
+            try:
+                sdf = df[ticker] if len(chunk) > 1 else df
+            except (KeyError, TypeError):
+                continue
+            if sdf is None or sdf.empty:
+                continue
+
+            added = False
+            for idx, row in sdf.iterrows():
+                try:
+                    close = float(row["Close"])
+                    vol_raw = row["Volume"]
+                except Exception:
+                    continue
+                if pd.isna(close) or close <= 0:
+                    continue
+                vol = int(vol_raw) if not pd.isna(vol_raw) else 0
+                d_str = idx.strftime("%Y-%m-%d")
+                cache.setdefault(d_str, {})[sym] = [close, vol]
+                close_hist.setdefault(sym, {})[d_str] = close
+                vol_hist.setdefault(sym, {})[d_str]   = vol
+                added = True
+            if added:
+                success += 1
+
+    print(f"  yfinance bootstrap done: {success}/{len(need)} stocks backfilled.")
+    return success
+
 # ── Technical indicators ──────────────────────────────────────────────────────
 
 def calc_ema(s: pd.Series, span: int) -> pd.Series:
@@ -330,7 +411,10 @@ def main():
     if not today_records:
         print("No data returned — likely a holiday. Skipping.")
         sys.exit(0)
-    print(f"  {len(today_records)} stocks fetched.")
+    print(f"  TWSE: {len(twse or [])}  TPEX: {len(tpex or [])}  Total: {len(today_records)}")
+
+    twse_symbols = [r["symbol"] for r in (twse or [])]
+    tpex_symbols = [r["symbol"] for r in (tpex or [])]
 
     # 2. Load historical cache
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -355,6 +439,13 @@ def main():
             time.sleep(0.3)
             if recs:
                 add_records_to_cache(cache, close_hist, vol_hist, recs, d_str)
+
+    # 3b. Backfill TPEX history via yfinance (TPEX OpenAPI doesn't support historical dates)
+    # Also backfill any TWSE stocks that still lack history (e.g. STOCK_DAY_ALL gaps)
+    if tpex_symbols:
+        bootstrap_via_yfinance(tpex_symbols, ".TWO", today, close_hist, vol_hist, cache)
+    if twse_symbols:
+        bootstrap_via_yfinance(twse_symbols, ".TW",  today, close_hist, vol_hist, cache)
 
     # 4. Build sorted date list used for indicator computation
     cutoff    = ds(needed[-1]) if needed else "2000-01-01"
